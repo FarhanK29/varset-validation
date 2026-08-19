@@ -28,3 +28,13 @@ variable "environment" {
   type    = string
   default = "unknown"
 }
+
+output "region_out" {
+  type  = string
+  value = component.app.region_out
+}
+
+output "environment_out" {
+  type  = string
+  value = component.app.environment_out
+}
