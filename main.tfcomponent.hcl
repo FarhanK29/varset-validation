@@ -17,6 +17,6 @@ component "app" {
 
 store "varset" "my-varset" {
   # Update this to reference your varset by external ID or name
-  # id = "varset-xxxxxxxxxxxx"   # reference by external ID
-  # name = "my-stack-varset"     # reference by name
+  # id = "varset-dTWGhyEDnuTsJ1Rm"   # reference by external ID
+  # name = "tc1-stack-varset"     # reference by name
 }
