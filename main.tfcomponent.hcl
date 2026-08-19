@@ -22,11 +22,9 @@ component "app" {
 
 variable "region" {
   type = string
-  ephemeral = true
 }
 
 variable "environment" {
   type    = string
-  ephemeral = true
   default = "unknown"
 }

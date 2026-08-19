@@ -5,7 +5,7 @@ store "varset" "my-varset" {
 
 deployment "production" {
   inputs = {
-    region      = store.varset.my-varset.region
-    environment = store.varset.my-varset.environment
+    environment = store.varset.my-varset.stable.environment
+    region      = store.varset.my-varset.stable.region
   }
 }
