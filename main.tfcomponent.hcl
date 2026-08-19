@@ -8,19 +8,23 @@ required_providers {
 provider "random" "this" {}
 
 component "app" {
-  source = "./app"
+  source = "./modules/app"
 
   providers = {
     random = provider.random.this
   }
 
   inputs = {
-    region      = store.varset.my-varset.region
-    environment = store.varset.my-varset.environment
+    region      = var.region
+    environment = var.environment
   }
 }
 
-# Fill in `name` or `id` for each test case before pushing
-store "varset" "my-varset" {
-  name = "tc1-stack-varset"
+variable "region" {
+  type = string
+}
+
+variable "environment" {
+  type    = string
+  default = "unknown"
 }
