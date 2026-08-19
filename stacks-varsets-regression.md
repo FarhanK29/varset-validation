@@ -287,6 +287,101 @@ what that means in practice:
 
 ---
 
+## Test Case 1b — Varset applied at the project scope; Stack inherits variables
+
+This test confirms that a varset scoped to the **project** that contains the Stack is
+automatically available to the Stack — no direct Stack assignment is required.
+
+### Setup
+
+1. In the HCP Terraform UI, go to **Settings → Variable sets → + New variable set**.
+2. Name it `tc1b-project-varset`.
+3. Under **Variable set scope**, select **"Apply to specific projects, Stacks and workspaces"**.
+4. Under **Apply to projects**, select the project that contains your Stack. Do **not** add the Stack under "Apply to Stacks".
+5. Add the following variables:
+
+   | Category  | Key           | Value        | Sensitive |
+   |-----------|---------------|--------------|-----------|
+   | Terraform | `region`      | `eu-west-1`  | No        |
+   | Terraform | `environment` | `project-env`| No        |
+
+6. Save the varset.
+7. Update the `store "varset" "my-varset"` block in `deployments.tfdeploy.hcl` to reference this varset:
+
+   ```hcl
+   store "varset" "my-varset" {
+     name     = "tc1b-project-varset"
+     category = "terraform"
+   }
+   ```
+
+8. Push the stack configuration.
+
+### Steps
+
+1. In the HCP Terraform UI, navigate to your Stack.
+2. Trigger a new run.
+3. Review the plan output under the **production** deployment.
+4. Approve and apply the run.
+
+### Expected behavior
+
+- The plan completes successfully with no "unknown variable" or "missing required variable" errors.
+- `region` resolves to `eu-west-1` and `environment` resolves to `project-env` — sourced from the project-scoped varset, not a direct Stack assignment.
+- The apply completes successfully.
+- Both output values (`region_out`, `environment_out`) appear in the Stack outputs with the correct values.
+
+---
+
+## Test Case 1c — Varset applied globally to the organization; Stack inherits variables
+
+This test confirms that a varset scoped to the **entire organization** is available to all
+Stacks without any project- or Stack-level assignment.
+
+### Setup
+
+1. In the HCP Terraform UI, go to **Settings → Variable sets → + New variable set**.
+2. Name it `tc1c-global-varset`.
+3. Under **Variable set scope**, select **"Apply globally"** (applies to all projects, Stacks, and workspaces in the organization).
+4. Add the following variables:
+
+   | Category  | Key           | Value        | Sensitive |
+   |-----------|---------------|--------------|-----------|
+   | Terraform | `region`      | `ap-east-1`  | No        |
+   | Terraform | `environment` | `global-env` | No        |
+
+5. Save the varset.
+6. Update the `store "varset" "my-varset"` block in `deployments.tfdeploy.hcl` to reference this varset:
+
+   ```hcl
+   store "varset" "my-varset" {
+     name     = "tc1c-global-varset"
+     category = "terraform"
+   }
+   ```
+
+7. Push the stack configuration.
+
+### Steps
+
+1. In the HCP Terraform UI, navigate to your Stack.
+2. Trigger a new run.
+3. Review the plan output under the **production** deployment.
+4. Approve and apply the run.
+
+### Expected behavior
+
+- The plan completes successfully with no "unknown variable" or "missing required variable" errors.
+- `region` resolves to `ap-east-1` and `environment` resolves to `global-env` — sourced from the globally-scoped varset with no direct project or Stack assignment.
+- The apply completes successfully.
+- Both output values (`region_out`, `environment_out`) appear in the Stack outputs with the correct values.
+
+> **Cleanup note:** Delete or set the scope of `tc1c-global-varset` back to a specific project
+> after this test. A globally-scoped varset will interfere with later test cases that verify
+> priority resolution and removal behavior.
+
+---
+
 ## Test Case 2 — Two varsets defining the same key; priority flag resolves correctly
 
 This test confirms that when two varsets both define the same key and one has **Priority** enabled,
