@@ -7,7 +7,8 @@ required_providers {
 
 provider "random" "this" {}
 
-  source = "./modules/app"
+component "app" {
+  source = "./app"
 
   providers = {
     random = provider.random.this
@@ -19,8 +20,7 @@ provider "random" "this" {}
   }
 }
 
-
+# Fill in `name` or `id` for each test case before pushing
 store "varset" "my-varset" {
-  # Update this to reference your varset by external ID or name
-  name = "tc1-stack-varset"     # reference by name
+  name = "tc1-stack-varset"
 }
