@@ -382,63 +382,67 @@ Stacks without any project- or Stack-level assignment.
 
 ---
 
-## Test Case 2 — Two varsets defining the same key; scope specificity resolves correctly
+## Test Case 2 — Two varsets each providing a different variable; both resolve in one run
 
-This test confirms that when two varsets both define the same key, the more narrowly scoped
-varset wins. A varset assigned directly to a Stack takes precedence over one assigned at the
-project level.
+This test confirms that a single deployment can draw from two separate varsets simultaneously
+by defining two `store "varset"` blocks — one per varset — and that each contributes its own
+key without interfering with the other.
 
 ### Setup
 
-1. Create a first varset named `tc2-project-varset`:
-   - Scope: assigned to the **project** that contains your Stack (under **Apply to projects**). Do **not** assign it directly to the Stack.
-   - Variable: `region` = `us-west-2` (Terraform category)
+1. Create a first varset named `tc2-region-varset`:
+   - Scope: assigned directly to your Stack
+   - Variables:
 
-2. Create a second varset named `tc2-stack-varset`:
-   - Scope: assigned directly to your **Stack** (under **Apply to Stacks**).
-   - Variable: `region` = `eu-central-1` (Terraform category)
+     | Category  | Key      | Value       | Sensitive |
+     |-----------|----------|-------------|-----------|
+     | Terraform | `region` | `us-west-2` | No        |
 
-3. Update the `store "varset" "my-varset"` block in `deployments.tfdeploy.hcl` to reference the stack-scoped varset:
+2. Create a second varset named `tc2-env-varset`:
+   - Scope: assigned directly to your Stack
+   - Variables:
+
+     | Category  | Key           | Value    | Sensitive |
+     |-----------|---------------|----------|-----------|
+     | Terraform | `environment` | `staging`| No        |
+
+3. Update `deployments.tfdeploy.hcl` to define two `store` blocks and wire each input from a different one:
 
    ```hcl
-   store "varset" "my-varset" {
-     name     = "tc2-stack-varset"
+   store "varset" "region-store" {
+     name     = "tc2-region-varset"
      category = "terraform"
    }
-   ```
 
-   > Both varsets define `region`. The Stack-scoped varset is more specific than the
-   > project-scoped one, so it should win.
+   store "varset" "env-store" {
+     name     = "tc2-env-varset"
+     category = "terraform"
+   }
+
+   deployment "production" {
+     inputs = {
+       region      = store.varset.region-store.stable.region
+       environment = store.varset.env-store.stable.environment
+     }
+   }
+   ```
 
 4. Push the configuration.
 
 ### Steps
 
-**Part A — Confirm stack-scoped varset wins:**
-
-1. Trigger a new Stack run.
-2. Check the plan output for the `region` value under the **production** deployment.
-
-**Part B — Confirm project-scoped varset is used when stack-scoped is removed:**
-
-3. In the UI, edit `tc2-stack-varset` and remove your Stack from **Apply to Stacks**. Save the varset.
-4. Update `deployments.tfdeploy.hcl` to reference the project-scoped varset instead:
-
-   ```hcl
-   store "varset" "my-varset" {
-     name     = "tc2-project-varset"
-     category = "terraform"
-   }
-   ```
-
-5. Push the configuration and trigger a new Stack run.
-6. Check the plan output for the `region` value.
+1. In the HCP Terraform UI, navigate to your Stack.
+2. Trigger a new run.
+3. Review the plan output under the **production** deployment.
+4. Approve and apply the run.
 
 ### Expected behavior
 
-- **Part A:** `region` resolves to `eu-central-1` (from `tc2-stack-varset`, the more narrowly scoped varset).
-- **Part B:** `region` resolves to `us-west-2` (from `tc2-project-varset`, now the only assigned varset).
-- No plan errors in either part.
+- The plan completes successfully with no errors.
+- `region` resolves to `us-west-2` (sourced from `tc2-region-varset`).
+- `environment` resolves to `staging` (sourced from `tc2-env-varset`).
+- Both output values (`region_out`, `environment_out`) appear in the Stack outputs with the correct values.
+- Neither varset's absence of the other's key causes an error — each store only needs to provide the key it is wired to.
 
 ---
 
@@ -451,25 +455,30 @@ the very next run without needing to modify the stack configuration.
 
 1. Create a varset named `tc3-update-varset`:
    - Scope: assigned directly to your Stack
-   - Variable: `region` = `us-east-1` (Terraform category)
+   - Variables:
 
-2. Update `main.tfcomponent.hcl` to reference it:
+     | Category  | Key           | Value        | Sensitive |
+     |-----------|---------------|--------------|-----------|
+     | Terraform | `region`      | `us-east-1`  | No        |
+     | Terraform | `environment` | `production` | No        |
+
+2. Update `deployments.tfdeploy.hcl` to reference it:
 
    ```hcl
-   component "app" {
-     source = "./modules/app"
-
-     inputs = {
-       region = store.varset.my-varset.region
-     }
+   store "varset" "my-varset" {
+     name     = "tc3-update-varset"
+     category = "terraform"
    }
 
-   store "varset" "my-varset" {
-     name = "tc3-update-varset"
+   deployment "production" {
+     inputs = {
+       region      = store.varset.my-varset.stable.region
+       environment = store.varset.my-varset.stable.environment
+     }
    }
    ```
 
-3. Push and run the Stack until a successful apply. Confirm `region_out` = `us-east-1` in the outputs.
+3. Push and run the Stack until a successful apply. Confirm `region_out` = `us-east-1` and `environment_out` = `production` in the outputs.
 
 ### Steps
 
@@ -484,6 +493,7 @@ the very next run without needing to modify the stack configuration.
 
 - The plan shows `region` = `ap-southeast-1` (the updated value).
 - The plan does **not** show `us-east-1` (the old value is not cached).
+- `environment` remains `production` — unchanged and unaffected.
 - No configuration upload or code change was needed to pick up the new value.
 - The apply completes successfully with the updated value in outputs.
 
@@ -498,25 +508,30 @@ resolve the variables it provided.
 
 1. Create a varset named `tc4-removal-varset`:
    - Scope: assigned directly to your Stack
-   - Variable: `region` = `us-east-1` (Terraform category)
+   - Variables:
 
-2. Update `main.tfcomponent.hcl`:
+     | Category  | Key           | Value        | Sensitive |
+     |-----------|---------------|--------------|-----------|
+     | Terraform | `region`      | `us-east-1`  | No        |
+     | Terraform | `environment` | `production` | No        |
+
+2. Update `deployments.tfdeploy.hcl`:
 
    ```hcl
-   component "app" {
-     source = "./modules/app"
-
-     inputs = {
-       region = store.varset.my-varset.region
-     }
+   store "varset" "my-varset" {
+     name     = "tc4-removal-varset"
+     category = "terraform"
    }
 
-   store "varset" "my-varset" {
-     name = "tc4-removal-varset"
+   deployment "production" {
+     inputs = {
+       region      = store.varset.my-varset.stable.region
+       environment = store.varset.my-varset.stable.environment
+     }
    }
    ```
 
-3. Push and confirm a successful plan/apply with `region` = `us-east-1`.
+3. Push and confirm a successful plan/apply with `region` = `us-east-1` and `environment` = `production`.
 
 ### Steps
 
@@ -546,25 +561,30 @@ or a silent pass with empty variables.
 
 1. Create a varset named `tc5-delete-varset`:
    - Scope: assigned directly to your Stack
-   - Variable: `region` = `us-east-1` (Terraform category)
+   - Variables:
 
-2. Update `main.tfcomponent.hcl`:
+     | Category  | Key           | Value        | Sensitive |
+     |-----------|---------------|--------------|-----------|
+     | Terraform | `region`      | `us-east-1`  | No        |
+     | Terraform | `environment` | `production` | No        |
+
+2. Update `deployments.tfdeploy.hcl`:
 
    ```hcl
-   component "app" {
-     source = "./modules/app"
-
-     inputs = {
-       region = store.varset.my-varset.region
-     }
+   store "varset" "my-varset" {
+     name     = "tc5-delete-varset"
+     category = "terraform"
    }
 
-   store "varset" "my-varset" {
-     name = "tc5-delete-varset"
+   deployment "production" {
+     inputs = {
+       region      = store.varset.my-varset.stable.region
+       environment = store.varset.my-varset.stable.environment
+     }
    }
    ```
 
-3. Push and confirm a successful plan/apply.
+3. Push and confirm a successful plan/apply with `region` = `us-east-1` and `environment` = `production`.
 
 ### Steps
 
@@ -593,55 +613,41 @@ Deployments that do not reference the varset are unaffected.
 
 ### Setup
 
-Update `deployments.tfdeploy.hcl` to define two deployments:
+1. Create a varset named `tc6-scoped-varset`:
+   - Scope: assigned directly to your Stack
+   - Variables:
 
-```hcl
-deployment "production" {
-  inputs = {}
-}
+     | Category  | Key           | Value        | Sensitive |
+     |-----------|---------------|--------------|-----------|
+     | Terraform | `region`      | `us-east-1`  | No        |
+     | Terraform | `environment` | `production` | No        |
 
-deployment "staging" {
-  inputs = {}
-}
-```
+2. Update `deployments.tfdeploy.hcl` to define two deployments. The `production` deployment
+   pulls both inputs from the varset; the `staging` deployment uses hardcoded values and does
+   not reference the varset at all:
 
-Update `main.tfcomponent.hcl` so only the `production` deployment's component references the varset.
-The `staging` component uses a hardcoded fallback instead:
+   ```hcl
+   store "varset" "my-varset" {
+     name     = "tc6-scoped-varset"
+     category = "terraform"
+   }
 
-```hcl
-component "app_production" {
-  source = "./modules/app"
+   deployment "production" {
+     inputs = {
+       region      = store.varset.my-varset.stable.region
+       environment = store.varset.my-varset.stable.environment
+     }
+   }
 
-  inputs = {
-    region      = store.varset.my-varset.region
-    environment = store.varset.my-varset.environment
-  }
-}
+   deployment "staging" {
+     inputs = {
+       region      = "us-west-1"   # hardcoded — does not use the varset
+       environment = "staging"     # hardcoded — does not use the varset
+     }
+   }
+   ```
 
-component "app_staging" {
-  source = "./modules/app"
-
-  inputs = {
-    region      = "us-west-1"   # hardcoded — does not use the varset
-    environment = "staging"
-  }
-}
-
-store "varset" "my-varset" {
-  name = "tc6-scoped-varset"
-}
-```
-
-Create a varset named `tc6-scoped-varset`:
-- Scope: assigned directly to your Stack
-- Variables:
-
-  | Category  | Key           | Value        | Sensitive |
-  |-----------|---------------|--------------|-----------|
-  | Terraform | `region`      | `us-east-1`  | No        |
-  | Terraform | `environment` | `production` | No        |
-
-Push the configuration.
+3. Push the configuration.
 
 ### Steps
 
