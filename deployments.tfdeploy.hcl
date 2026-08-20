@@ -1,5 +1,5 @@
 store "varset" "my-varset" {
-  name     = "tc4-removal-varset"
+  name     = "tc5-delete-varset"
   category = "terraform"
 }
 
