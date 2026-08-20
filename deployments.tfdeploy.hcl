@@ -1,5 +1,5 @@
 store "varset" "my-varset" {
-  name     = "tc1c-global-varset"
+  name     = "tc2-stack-varset"
   category = "terraform"
 }
 

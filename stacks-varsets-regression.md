@@ -382,63 +382,62 @@ Stacks without any project- or Stack-level assignment.
 
 ---
 
-## Test Case 2 — Two varsets defining the same key; priority flag resolves correctly
+## Test Case 2 — Two varsets defining the same key; scope specificity resolves correctly
 
-This test confirms that when two varsets both define the same key and one has **Priority** enabled,
-the priority varset wins.
+This test confirms that when two varsets both define the same key, the more narrowly scoped
+varset wins. A varset assigned directly to a Stack takes precedence over one assigned at the
+project level.
 
 ### Setup
 
-1. Create a first varset named `tc2-base-varset`:
-   - Scope: assigned directly to your Stack
+1. Create a first varset named `tc2-project-varset`:
+   - Scope: assigned to the **project** that contains your Stack (under **Apply to projects**). Do **not** assign it directly to the Stack.
    - Variable: `region` = `us-west-2` (Terraform category)
-   - Priority: **off**
 
-2. Create a second varset named `tc2-priority-varset`:
-   - Scope: assigned directly to your Stack
+2. Create a second varset named `tc2-stack-varset`:
+   - Scope: assigned directly to your **Stack** (under **Apply to Stacks**).
    - Variable: `region` = `eu-central-1` (Terraform category)
-   - Priority: **on** (check "Prioritize the variables in this set")
 
-3. Update `main.tfcomponent.hcl` to only reference the `region` key (remove `environment` for simplicity):
+3. Update the `store "varset" "my-varset"` block in `deployments.tfdeploy.hcl` to reference the stack-scoped varset:
 
    ```hcl
-   component "app" {
-     source = "./modules/app"
-
-     inputs = {
-       region = store.varset.my-varset.region
-     }
-   }
-
    store "varset" "my-varset" {
-     name = "tc2-base-varset"
+     name     = "tc2-stack-varset"
+     category = "terraform"
    }
    ```
 
-   > The stack references `tc2-base-varset` explicitly. Both varsets are assigned to the stack,
-   > so both are available. The priority flag determines which value wins when the same key exists
-   > across multiple varsets.
+   > Both varsets define `region`. The Stack-scoped varset is more specific than the
+   > project-scoped one, so it should win.
 
 4. Push the configuration.
 
 ### Steps
 
-**Part A — Confirm base varset value without priority:**
+**Part A — Confirm stack-scoped varset wins:**
 
-1. Temporarily disable the **Priority** flag on `tc2-priority-varset` (edit the varset and uncheck priority).
-2. Trigger a new Stack run.
-3. Check the plan output for the `region` value.
+1. Trigger a new Stack run.
+2. Check the plan output for the `region` value under the **production** deployment.
 
-**Part B — Enable priority and confirm override:**
+**Part B — Confirm project-scoped varset is used when stack-scoped is removed:**
 
-4. Edit `tc2-priority-varset` and re-enable the **Priority** flag.
-5. Trigger another Stack run.
+3. In the UI, edit `tc2-stack-varset` and remove your Stack from **Apply to Stacks**. Save the varset.
+4. Update `deployments.tfdeploy.hcl` to reference the project-scoped varset instead:
+
+   ```hcl
+   store "varset" "my-varset" {
+     name     = "tc2-project-varset"
+     category = "terraform"
+   }
+   ```
+
+5. Push the configuration and trigger a new Stack run.
 6. Check the plan output for the `region` value.
 
 ### Expected behavior
 
-- **Part A:** `region` resolves to `us-west-2` (from `tc2-base-varset`, the non-priority varset).
-- **Part B:** `region` resolves to `eu-central-1` (from `tc2-priority-varset`, the priority varset overrides the base varset regardless of scope specificity).
+- **Part A:** `region` resolves to `eu-central-1` (from `tc2-stack-varset`, the more narrowly scoped varset).
+- **Part B:** `region` resolves to `us-west-2` (from `tc2-project-varset`, now the only assigned varset).
 - No plan errors in either part.
 
 ---
