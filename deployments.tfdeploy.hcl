@@ -1,5 +1,5 @@
 store "varset" "my-varset" {
-  id       = "varset-4aK9PSJuZmuJbRSt"   # replace with the actual ID from step 2
+  name = "tc8-stack-varset"
   category = "terraform"
 }
 
