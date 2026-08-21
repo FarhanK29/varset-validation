@@ -1,5 +1,5 @@
 store "varset" "my-varset" {
-  name = "tc8-stack-varset"
+  name = "tc8-stack-varset-namechange"
   category = "terraform"
 }
 
