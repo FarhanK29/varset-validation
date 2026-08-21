@@ -673,6 +673,133 @@ Deployments that do not reference the varset are unaffected.
 
 ---
 
+## Test Case 7 — Varset referenced by `id`; plan and apply succeed
+
+This test confirms that a `store "varset"` block using the varset's external `id`
+(e.g. `varset-xxxxxxxxxxxx`) resolves correctly, as an alternative to referencing by `name`.
+
+### Setup
+
+1. Create a varset named `tc7-id-varset`:
+   - Scope: assigned directly to your Stack
+   - Variables:
+
+     | Category  | Key           | Value        | Sensitive |
+     |-----------|---------------|--------------|-----------|
+     | Terraform | `region`      | `us-east-2`  | No        |
+     | Terraform | `environment` | `production` | No        |
+
+2. Find the varset's external ID:
+   - In the HCP Terraform UI, open `tc7-id-varset`.
+   - The ID is shown in the URL: `...variable-sets/varset-xxxxxxxxxxxx` — copy the full `varset-xxxxxxxxxxxx` value.
+
+3. Update `deployments.tfdeploy.hcl` to reference the varset by `id` instead of `name`:
+
+   ```hcl
+   store "varset" "my-varset" {
+     id       = "varset-xxxxxxxxxxxx"   # replace with the actual ID from step 2
+     category = "terraform"
+   }
+
+   deployment "production" {
+     inputs = {
+       region      = store.varset.my-varset.stable.region
+       environment = store.varset.my-varset.stable.environment
+     }
+   }
+   ```
+
+4. Push the configuration.
+
+### Steps
+
+1. In the HCP Terraform UI, navigate to your Stack.
+2. Trigger a new run.
+3. Review the plan output under the **production** deployment.
+4. Approve and apply the run.
+
+### Expected behavior
+
+- The plan completes successfully with no errors.
+- `region` resolves to `us-east-2` and `environment` resolves to `production`.
+- Both output values (`region_out`, `environment_out`) appear in the Stack outputs with the correct values.
+- Behavior is identical to a `name`-based reference — the lookup mechanism is transparent to the run.
+
+---
+
+## Test Case 8 — Varset renamed; `name` reference breaks, `id` reference survives
+
+This test confirms the practical difference between `name`- and `id`-based store references.
+After a varset is renamed in the UI, a `store` block using the old `name` will fail on the
+next run, while a `store` block using the `id` continues to resolve correctly.
+
+### Setup
+
+1. Create a varset named `tc8-rename-varset`:
+   - Scope: assigned directly to your Stack
+   - Variables:
+
+     | Category  | Key           | Value        | Sensitive |
+     |-----------|---------------|--------------|-----------|
+     | Terraform | `region`      | `eu-west-2`  | No        |
+     | Terraform | `environment` | `production` | No        |
+
+2. Note the varset's external ID from the URL (e.g. `varset-xxxxxxxxxxxx`).
+
+3. Update `deployments.tfdeploy.hcl` to reference the varset by `name` and confirm a passing run:
+
+   ```hcl
+   store "varset" "my-varset" {
+     name     = "tc8-rename-varset"
+     category = "terraform"
+   }
+
+   deployment "production" {
+     inputs = {
+       region      = store.varset.my-varset.stable.region
+       environment = store.varset.my-varset.stable.environment
+     }
+   }
+   ```
+
+4. Push and confirm a successful plan/apply with `region` = `eu-west-2`.
+
+### Steps
+
+**Part A — Rename the varset and confirm the `name` reference breaks:**
+
+1. In the UI, open `tc8-rename-varset`, click **Edit variable set**, and rename it to `tc8-rename-varset-updated`. Save.
+2. Trigger a new Stack run without pushing any configuration changes.
+3. Observe the run status and error message.
+
+**Part B — Switch to an `id` reference and confirm it survives the rename:**
+
+4. Update `deployments.tfdeploy.hcl` to reference the varset by `id` instead:
+
+   ```hcl
+   store "varset" "my-varset" {
+     id       = "varset-xxxxxxxxxxxx"   # the ID noted in setup step 2
+     category = "terraform"
+   }
+
+   deployment "production" {
+     inputs = {
+       region      = store.varset.my-varset.stable.region
+       environment = store.varset.my-varset.stable.environment
+     }
+   }
+   ```
+
+5. Push the configuration and trigger a new Stack run.
+6. Review the plan output and apply.
+
+### Expected behavior
+
+- **Part A:** The run fails with an error indicating the varset `tc8-rename-varset` no longer exists or is not assigned to this stack's project. No apply is attempted.
+- **Part B:** The plan completes successfully. `region` resolves to `eu-west-2` and `environment` resolves to `production` — the rename did not affect the `id`-based lookup. Apply succeeds.
+
+---
+
 ## Notes for future test cases
 
 - Each test case is self-contained. Re-use the same Stack and repository but create fresh varsets per test to avoid state bleed between cases.
